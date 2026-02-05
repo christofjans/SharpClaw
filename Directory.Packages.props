@@ -5,4 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
   </ItemGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.2.0" />
+  </ItemGroup>
 </Project>
