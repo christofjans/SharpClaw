@@ -1,6 +1,7 @@
 namespace OpenBotLib;
 
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.AI;
 using OpenAI;
 
@@ -9,16 +10,20 @@ public sealed class ChatClient : IDisposable
     private readonly IChatClient client;
     private readonly List<ChatMessage> chatHistory = [];
     private readonly ChatOptions? chatOptions;
+    private readonly SkillCatalog? skills;
+    private readonly HashSet<string> activatedSkills = new(StringComparer.OrdinalIgnoreCase);
 
     public const string DefaultSystemPrompt = "You are a helpful AI assistant. Answer the user's questions in a friendly and informative manner.";
     /*public const string DefaultOllamaUrl = "http://localhost:11434";
     public const string DefaultOllamaModel = "gpt-oss:20b";*/
     public const string DefaultOpenAIModel = "gpt-5.2";
 
-    public static ChatClient CreateOpenAI(string apiKey, string? systemPrompt = null, (Delegate func, string description)[]? tools = null, string? model = null)
+    private sealed record SkillSelection([property: JsonPropertyName("skillName")] string? SkillName);
+
+    public static ChatClient CreateOpenAI(string apiKey, string? systemPrompt = null, (Delegate func, string description)[]? tools = null, string? model = null, string? skillsDirectory = null)
     {
         var openAIClient = new OpenAIClient(apiKey).GetChatClient(model ?? DefaultOpenAIModel).AsIChatClient();
-        return new ChatClient(openAIClient, systemPrompt, tools);
+        return new ChatClient(openAIClient, systemPrompt, tools, skillsDirectory);
     }
 
     /*
@@ -29,9 +34,10 @@ public sealed class ChatClient : IDisposable
     }
     */
 
-    public ChatClient(IChatClient client, string? systemPrompt = null, (Delegate func, string description)[]? tools = null)
+    public ChatClient(IChatClient client, string? systemPrompt = null, (Delegate func, string description)[]? tools = null, string? skillsDirectory = null)
     {
         this.client = client;
+        skills = LoadSkills(skillsDirectory);
         if (tools != null && tools.Length > 0)
         {
             chatOptions = new()
@@ -39,7 +45,8 @@ public sealed class ChatClient : IDisposable
                 Tools = [.. tools.Select(t => AIFunctionFactory.Create(t.func, description: t.description))]
             };
         }
-        chatHistory.Add(new ChatMessage(ChatRole.System, systemPrompt ?? DefaultSystemPrompt));
+        var effectiveSystemPrompt = BuildSystemPrompt(systemPrompt ?? DefaultSystemPrompt, skills);
+        chatHistory.Add(new ChatMessage(ChatRole.System, effectiveSystemPrompt));
         if (chatOptions != null)
         {
             this.client = new FunctionInvokingChatClient(client);
@@ -48,6 +55,7 @@ public sealed class ChatClient : IDisposable
 
     public async Task<string> PromptAsync(string prompt, CancellationToken cancellationToken = default)
     {
+        await ActivateSkillIfNeededAsync(prompt, cancellationToken);
         chatHistory.Add(new ChatMessage(ChatRole.User, prompt));
         string response = $"{await client.GetResponseAsync(chatHistory, chatOptions, cancellationToken)}";
         chatHistory.Add(new ChatMessage(ChatRole.Assistant, response));
@@ -57,6 +65,7 @@ public sealed class ChatClient : IDisposable
 
     public async Task<T> PromptAsync<T>(string prompt, CancellationToken cancellationToken = default)
     {
+        await ActivateSkillIfNeededAsync(prompt, cancellationToken);
         chatHistory.Add(new ChatMessage(ChatRole.User, prompt));
         var response = await client.GetResponseAsync<T>(chatHistory, chatOptions, useJsonSchemaResponseFormat: true, cancellationToken);
         chatHistory.Add(new ChatMessage(ChatRole.Assistant, $"{response}"));
@@ -66,11 +75,32 @@ public sealed class ChatClient : IDisposable
 
     public async IAsyncEnumerable<string> StreamPromptAsync(string prompt, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        await ActivateSkillIfNeededAsync(prompt, cancellationToken);
         chatHistory.Add(new ChatMessage(ChatRole.User, prompt));
         await foreach (var response in client.GetStreamingResponseAsync(chatHistory, chatOptions, cancellationToken))
         {
             yield return $"{response}";
         }
+    }
+
+    public void ActivateSkill(string skillName)
+    {
+        if (skills is null || skills.IsEmpty)
+        {
+            throw new InvalidOperationException("Skill support is not configured.");
+        }
+
+        if (!skills.TryGetSkill(skillName, out var skill) || skill is null)
+        {
+            throw new KeyNotFoundException($"Skill '{skillName}' not found.");
+        }
+
+        if (!activatedSkills.Add(skill.Metadata.Name))
+        {
+            return;
+        }
+
+        chatHistory.Add(new ChatMessage(ChatRole.System, $"Activated skill: {skill.Metadata.Name}{Environment.NewLine}{skill.FullContent}"));
     }
 
     public string GetChatHistoryString()
@@ -89,4 +119,84 @@ public sealed class ChatClient : IDisposable
     public IEnumerable<ChatMessage> GetChatHistory() => chatHistory;
 
     public void Dispose() => client.Dispose();
+
+    private async Task ActivateSkillIfNeededAsync(string prompt, CancellationToken cancellationToken)
+    {
+        if (skills is null || skills.IsEmpty)
+        {
+            return;
+        }
+
+        if (activatedSkills.Count >= skills.Skills.Count)
+        {
+            return;
+        }
+
+        var metadataSection = skills.BuildMetadataPromptSection();
+        if (string.IsNullOrWhiteSpace(metadataSection))
+        {
+            return;
+        }
+
+        List<ChatMessage> selectionMessages =
+        [
+            new ChatMessage(ChatRole.System, BuildSkillSelectionSystemPrompt(metadataSection)),
+            new ChatMessage(ChatRole.User, prompt)
+        ];
+
+        var selection = await client.GetResponseAsync<SkillSelection>(
+            selectionMessages,
+            null,
+            useJsonSchemaResponseFormat: true,
+            cancellationToken);
+
+        var skillName = selection.Result.SkillName?.Trim();
+        if (string.IsNullOrWhiteSpace(skillName) ||
+            skillName.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+            skillName.Equals("null", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (!skills.TryGetSkill(skillName, out _))
+        {
+            throw new InvalidOperationException($"Skill selection returned unknown skill '{skillName}'.");
+        }
+
+        ActivateSkill(skillName);
+    }
+
+    private static SkillCatalog? LoadSkills(string? skillsDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(skillsDirectory))
+        {
+            return null;
+        }
+
+        return SkillLoader.LoadFromDirectory(skillsDirectory);
+    }
+
+    private static string BuildSystemPrompt(string basePrompt, SkillCatalog? skills)
+    {
+        if (skills is null || skills.IsEmpty)
+        {
+            return basePrompt;
+        }
+
+        var metadataSection = skills.BuildMetadataPromptSection();
+        if (string.IsNullOrWhiteSpace(metadataSection))
+        {
+            return basePrompt;
+        }
+
+        return $"{basePrompt}{Environment.NewLine}{Environment.NewLine}{metadataSection}";
+    }
+
+    private static string BuildSkillSelectionSystemPrompt(string metadataSection) => $"""
+        You are a skill selection assistant. Decide whether activating a skill would improve the response to the user's prompt.
+        Choose at most one skill, and only when it would clearly help. Do not rely on keyword matching or simple heuristics.
+        Respond using JSON with a single property "skillName" set to the exact skill name from the list, or null if no skill should be activated.
+
+        {metadataSection}
+        """;
 }
