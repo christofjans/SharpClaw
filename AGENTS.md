@@ -13,6 +13,10 @@ This is a class library that encompasses the main functionality of a modern AI a
 
 This project uses C# and .NET 10.0.
 
+## Project Structure
+
+- `.\src\OpenBotLib`: Main library code
+
 ## Code Style
 
 - Follow C# conventions as per Microsoft documentation.
