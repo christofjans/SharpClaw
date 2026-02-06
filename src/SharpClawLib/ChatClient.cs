@@ -133,9 +133,28 @@ public sealed class ChatClient : IDisposable
             </TRANSCRIPT>
             """),
         ];
-        var selection = await client.GetResponseAsync<string[]>(messages);
+        var newMemoryLines = await client.GetResponseAsync<string[]>(messages);
 
-        File.AppendAllLines(memoryFilePath, selection.Result);
+        var oldMemoryLines = File.ReadAllLines(memoryFilePath);
+
+        messages =
+        [
+            new ChatMessage(ChatRole.System, MemoryMergePrompt),
+            new ChatMessage(ChatRole.User, $"""
+
+            <OLD_MEMORY>
+            {string.Join(Environment.NewLine, oldMemoryLines)}
+            </OLD_MEMORY>
+
+            <NEW_MEMORY>
+            {string.Join(Environment.NewLine, newMemoryLines.Result)}
+            </NEW_MEMORY>
+            """),
+        ];
+
+        var mergedMemoryLines = await client.GetResponseAsync<string[]>(messages);
+
+        File.WriteAllLines(memoryFilePath, mergedMemoryLines.Result);
     }
 
     public IEnumerable<ChatMessage> GetChatHistory() => chatHistory;
@@ -260,6 +279,23 @@ public sealed class ChatClient : IDisposable
     - Do NOT rewrite or paraphrase into speculative language.
     - Do NOT include transient states (mood, feelings, one-off reactions).
     - If no durable facts exist, output an empty list.
+
+    Output format:
+    - Return valid JSON only.
+    - Use a JSON array of string.
+    - Each string contains a single fact.
+    """;
+
+    private static string MemoryMergePrompt = """
+    You are a memory merging engine for an AI companion.
+    Your task is to merge new facts into existing memory, making sure to avoid duplicates while preserving all unique information.
+
+    Rules:
+    - Combine the old and new facts into a single list.
+    - Remove duplicates, but do not remove similar facts if they contain unique information.
+    - Do NOT remove old facts that are not contradicted by new facts, even if they are similar.
+    - Do NOT remove new facts that are not contradicted by old facts, even if they are similar.
+    - If contradictions exist, keep the new fact and remove the old fact.
 
     Output format:
     - Return valid JSON only.
