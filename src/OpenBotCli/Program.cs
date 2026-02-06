@@ -15,15 +15,9 @@ var systemPrompt = parseResult.GetValue(systemPromptOption) ?? "You are a helpfu
 string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") 
     ?? throw new InvalidOperationException("OPENAI_API_KEY environment variable is not set.");
 
-string? skillsDirectory = Path.Combine(Directory.GetCurrentDirectory(), ".openbot", "skills");
-if (!Directory.Exists(skillsDirectory))
-{
-    skillsDirectory = null;
-}
-
 ToolRunner toolRunner = new();
 
-ChatClient chatClient = ChatClient.CreateOpenAI(apiKey, systemPrompt, tools: toolRunner.GetTools(), skillsDirectory: skillsDirectory);
+ChatClient chatClient = ChatClient.CreateOpenAI(apiKey, systemPrompt, tools: toolRunner.GetTools());
 
 while (true)
 {

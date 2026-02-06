@@ -10,7 +10,7 @@ public sealed class ChatClient : IDisposable
     private readonly IChatClient client;
     private readonly List<ChatMessage> chatHistory = [];
     private readonly ChatOptions? chatOptions;
-    private readonly SkillCatalog? skills;
+    private SkillCatalog? skills;
     private readonly HashSet<string> activatedSkills = new(StringComparer.OrdinalIgnoreCase);
 
     public const string DefaultSystemPrompt = "You are a helpful AI assistant. Answer the user's questions in a friendly and informative manner.";
@@ -20,10 +20,10 @@ public sealed class ChatClient : IDisposable
 
     private sealed record SkillSelection([property: JsonPropertyName("skillName")] string? SkillName);
 
-    public static ChatClient CreateOpenAI(string apiKey, string? systemPrompt = null, (Delegate func, string description)[]? tools = null, string? model = null, string? skillsDirectory = null)
+    public static ChatClient CreateOpenAI(string apiKey, string? systemPrompt = null, (Delegate func, string description)[]? tools = null, string? model = null)
     {
         var openAIClient = new OpenAIClient(apiKey).GetChatClient(model ?? DefaultOpenAIModel).AsIChatClient();
-        return new ChatClient(openAIClient, systemPrompt, tools, skillsDirectory);
+        return new ChatClient(openAIClient, systemPrompt, tools);
     }
 
     /*
@@ -34,10 +34,9 @@ public sealed class ChatClient : IDisposable
     }
     */
 
-    public ChatClient(IChatClient client, string? systemPrompt = null, (Delegate func, string description)[]? tools = null, string? skillsDirectory = null)
+    public ChatClient(IChatClient client, string? systemPrompt = null, (Delegate func, string description)[]? tools = null)
     {
         this.client = client;
-        skills = LoadSkills(skillsDirectory);
         if (tools != null && tools.Length > 0)
         {
             chatOptions = new()
@@ -45,7 +44,7 @@ public sealed class ChatClient : IDisposable
                 Tools = [.. tools.Select(t => AIFunctionFactory.Create(t.func, description: t.description))]
             };
         }
-        var effectiveSystemPrompt = BuildSystemPrompt(systemPrompt ?? DefaultSystemPrompt, skills);
+        var effectiveSystemPrompt = BuildSystemPrompt(systemPrompt ?? DefaultSystemPrompt);
         chatHistory.Add(new ChatMessage(ChatRole.System, effectiveSystemPrompt));
         if (chatOptions != null)
         {
@@ -166,9 +165,10 @@ public sealed class ChatClient : IDisposable
         ActivateSkill(skillName);
     }
 
-    private static SkillCatalog? LoadSkills(string? skillsDirectory)
+    private static SkillCatalog? LoadSkills()
     {
-        if (string.IsNullOrWhiteSpace(skillsDirectory))
+        var skillsDirectory = Path.Combine(Directory.GetCurrentDirectory(), ".openbot", "skills");
+        if (!Directory.Exists(skillsDirectory))
         {
             return null;
         }
@@ -176,8 +176,9 @@ public sealed class ChatClient : IDisposable
         return SkillLoader.LoadFromDirectory(skillsDirectory);
     }
 
-    private static string BuildSystemPrompt(string basePrompt, SkillCatalog? skills)
+    private string BuildSystemPrompt(string basePrompt)
     {
+        skills = LoadSkills();
         var prompt = basePrompt;
 
         var agentsFile = Path.Combine(Directory.GetCurrentDirectory(), "AGENTS.md");
