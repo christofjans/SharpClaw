@@ -26,6 +26,14 @@ ToolRunner toolRunner = new(toolName =>
 
 ChatClient chatClient = ChatClient.CreateOpenAI(apiKey, systemPrompt, tools: toolRunner.GetTools());
 
+bool memorySaved = false;
+
+Console.CancelKeyPress += (_, e) =>
+{
+    e.Cancel = true;
+    SaveMemory();
+};
+
 while (true)
 {
     Console.Write("> ");
@@ -41,4 +49,14 @@ while (true)
     Console.WriteLine($"{response}");
     Console.WriteLine();
     Console.ResetColor();
+}
+
+SaveMemory();
+
+void SaveMemory()
+{
+    if (memorySaved) return;
+    memorySaved = true;
+    Console.WriteLine("Exiting... Saving memory.");
+    chatClient.CompactAndSaveMemoryAsync().Wait();
 }

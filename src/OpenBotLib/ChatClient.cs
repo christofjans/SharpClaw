@@ -11,6 +11,7 @@ public sealed class ChatClient : IDisposable
     private readonly List<ChatMessage> chatHistory = [];
     private readonly ChatOptions? chatOptions;
     private SkillCatalog? skills;
+    private string? memoryFilePath = null;
     private readonly HashSet<string> activatedSkills = new(StringComparer.OrdinalIgnoreCase);
 
     public const string DefaultSystemPrompt = "You are a helpful AI assistant. Answer the user's questions in a friendly and informative manner.";
@@ -115,6 +116,28 @@ public sealed class ChatClient : IDisposable
         );
     }
 
+    public async Task CompactAndSaveMemoryAsync()
+    {
+        if (memoryFilePath is null)
+        {
+            return;
+        }
+        
+        var transcript = GetChatHistoryString();
+        List<ChatMessage> messages =
+        [
+            new ChatMessage(ChatRole.System, MemoryCompactionPrompt),
+            new ChatMessage(ChatRole.User, $"""
+            <TRANSCRIPT>
+            {transcript}
+            </TRANSCRIPT>
+            """),
+        ];
+        var selection = await client.GetResponseAsync<string[]>(messages);
+
+        File.AppendAllLines(memoryFilePath, selection.Result);
+    }
+
     public IEnumerable<ChatMessage> GetChatHistory() => chatHistory;
 
     public void Dispose() => client.Dispose();
@@ -200,6 +223,20 @@ public sealed class ChatClient : IDisposable
             }
         }
 
+        memoryFilePath = Path.Combine(Directory.GetCurrentDirectory(), "MEMORY.md");
+        if (File.Exists(memoryFilePath))
+        {
+            var memoryContent = File.ReadAllText(memoryFilePath);
+            if (!string.IsNullOrWhiteSpace(memoryContent))
+            {
+                prompt = $"{prompt}{Environment.NewLine}{Environment.NewLine}Here are you memories so far:{Environment.NewLine}{memoryContent}";
+            }
+        }
+        else
+        {
+            memoryFilePath = null;
+        }
+
         return prompt;
     }
 
@@ -210,4 +247,23 @@ public sealed class ChatClient : IDisposable
 
         {metadataSection}
         """;
+
+    private static string MemoryCompactionPrompt = """
+    You are a memory extraction engine for an AI companion.
+    Your task is to extract durable, factual information from a chat transcript.
+
+    Rules:
+    - Extract only long-term, actionable, or identity-related facts.
+    - Ignore emotional language, flirting, greetings, filler, and roleplay.
+    - Prefer facts that affect future behavior, permissions, capabilities, preferences, or configuration.
+    - Do NOT infer facts. Only extract what is explicitly stated.
+    - Do NOT rewrite or paraphrase into speculative language.
+    - Do NOT include transient states (mood, feelings, one-off reactions).
+    - If no durable facts exist, output an empty list.
+
+    Output format:
+    - Return valid JSON only.
+    - Use a JSON array of string.
+    - Each string contains a single fact.
+    """;
 }
