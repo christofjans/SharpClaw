@@ -29,7 +29,9 @@ while (true)
     }
 
     string response = await chatClient.PromptAsync(userInput);
+    Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine();
     Console.WriteLine($"{response}");
     Console.WriteLine();
+    Console.ResetColor();
 }
