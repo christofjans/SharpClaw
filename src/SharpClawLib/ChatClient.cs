@@ -63,6 +63,15 @@ public sealed class ChatClient : IDisposable
         return response;
     }
 
+    public async Task<string> PulseAsync(string prompt, CancellationToken cancellationToken = default)
+    {
+        chatHistory.Add(new ChatMessage(ChatRole.System, prompt));
+        string response = $"{await client.GetResponseAsync(chatHistory, chatOptions, cancellationToken)}";
+        chatHistory.Add(new ChatMessage(ChatRole.Assistant, response));
+
+        return response;
+    }
+
     public async Task<T> PromptAsync<T>(string prompt, CancellationToken cancellationToken = default)
     {
         await ActivateSkillIfNeededAsync(prompt, cancellationToken);
