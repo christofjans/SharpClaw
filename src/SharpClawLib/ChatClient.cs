@@ -190,7 +190,7 @@ public sealed class ChatClient : IDisposable
 
     private static SkillCatalog? LoadSkills()
     {
-        var skillsDirectory = Path.Combine(Directory.GetCurrentDirectory(), ".openbot", "skills");
+        var skillsDirectory = Path.Combine(Directory.GetCurrentDirectory(), ".sharpclaw", "skills");
         if (!Directory.Exists(skillsDirectory))
         {
             return null;

@@ -15,8 +15,8 @@ This project uses C# and .NET 10.0.
 
 ## Project Structure
 
-- `.\src\OpenBotLib`: Main library code
-- `.\src\OpenBotCli`: Command line interface for testing and interacting with the library
+- `.\src\SharpClawLib`: Main library code
+- `.\src\SharpClawCli`: Command line interface for testing and interacting with the library
 
 ## Code Style
 
