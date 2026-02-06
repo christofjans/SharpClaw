@@ -13,6 +13,7 @@ public sealed class ChatClient : IDisposable
     private SkillCatalog? skills;
     private string? memoryFilePath = null;
     private readonly HashSet<string> activatedSkills = new(StringComparer.OrdinalIgnoreCase);
+    private Action<string>? onSkillActivated;
 
     public const string DefaultSystemPrompt = "You are a helpful AI assistant. Answer the user's questions in a friendly and informative manner.";
     /*public const string DefaultOllamaUrl = "http://localhost:11434";
@@ -65,6 +66,7 @@ public sealed class ChatClient : IDisposable
 
     public async Task<string> PulseAsync(string prompt, CancellationToken cancellationToken = default)
     {
+        await ActivateSkillIfNeededAsync(prompt, cancellationToken);
         chatHistory.Add(new ChatMessage(ChatRole.System, prompt));
         string response = $"{await client.GetResponseAsync(chatHistory, chatOptions, cancellationToken)}";
         chatHistory.Add(new ChatMessage(ChatRole.Assistant, response));
@@ -92,6 +94,8 @@ public sealed class ChatClient : IDisposable
         }
     }
 
+    public void RegisterSkillActivatedCallback(Action<string> callback) => onSkillActivated = callback;
+
     public void ActivateSkill(string skillName)
     {
         if (skills is null || skills.IsEmpty)
@@ -110,6 +114,7 @@ public sealed class ChatClient : IDisposable
         }
 
         chatHistory.Add(new ChatMessage(ChatRole.System, $"Activated skill: {skill.Metadata.Name}{Environment.NewLine}{skill.FullContent}"));
+        onSkillActivated?.Invoke(skill.Metadata.Name);
     }
 
     public string GetChatHistoryString()

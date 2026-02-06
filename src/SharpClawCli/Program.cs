@@ -43,6 +43,13 @@ ToolRunner toolRunner = new(toolName =>
 });
 
 ChatClient chatClient = ChatClient.CreateOpenAI(apiKey, systemPrompt, tools: toolRunner.GetTools());
+chatClient.RegisterSkillActivatedCallback(skillName =>
+{
+    ConsoleColor previousColor = Console.ForegroundColor;
+    Console.ForegroundColor = ConsoleColor.Cyan;
+    Console.WriteLine($"Skill activated: {skillName}");
+    Console.ForegroundColor = previousColor;
+});
 
 bool memorySaved = false;
 
