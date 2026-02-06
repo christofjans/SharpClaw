@@ -178,18 +178,28 @@ public sealed class ChatClient : IDisposable
 
     private static string BuildSystemPrompt(string basePrompt, SkillCatalog? skills)
     {
-        if (skills is null || skills.IsEmpty)
+        var prompt = basePrompt;
+
+        var agentsFile = Path.Combine(Directory.GetCurrentDirectory(), "AGENTS.md");
+        if (File.Exists(agentsFile))
         {
-            return basePrompt;
+            var agentsContent = File.ReadAllText(agentsFile);
+            if (!string.IsNullOrWhiteSpace(agentsContent))
+            {
+                prompt = $"{prompt}{Environment.NewLine}{Environment.NewLine}{agentsContent}";
+            }
         }
 
-        var metadataSection = skills.BuildMetadataPromptSection();
-        if (string.IsNullOrWhiteSpace(metadataSection))
+        if (skills is not null && !skills.IsEmpty)
         {
-            return basePrompt;
+            var metadataSection = skills.BuildMetadataPromptSection();
+            if (!string.IsNullOrWhiteSpace(metadataSection))
+            {
+                prompt = $"{prompt}{Environment.NewLine}{Environment.NewLine}{metadataSection}";
+            }
         }
 
-        return $"{basePrompt}{Environment.NewLine}{Environment.NewLine}{metadataSection}";
+        return prompt;
     }
 
     private static string BuildSkillSelectionSystemPrompt(string metadataSection) => $"""
