@@ -21,7 +21,9 @@ if (!Directory.Exists(skillsDirectory))
     skillsDirectory = null;
 }
 
-ChatClient chatClient = ChatClient.CreateOpenAI(apiKey, systemPrompt, skillsDirectory: skillsDirectory);
+ToolRunner toolRunner = new();
+
+ChatClient chatClient = ChatClient.CreateOpenAI(apiKey, systemPrompt, tools: toolRunner.GetTools(), skillsDirectory: skillsDirectory);
 
 while (true)
 {
