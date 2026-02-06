@@ -1,4 +1,4 @@
-namespace OpenBotLib;
+namespace SharpClaw.SharpClawLib;
 
 using System.Diagnostics;
 

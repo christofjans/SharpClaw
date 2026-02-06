@@ -1,12 +1,12 @@
 ﻿using System.CommandLine;
-using OpenBotLib;
+using SharpClaw.SharpClawLib;
 
 Option<string> systemPromptOption = new("--system-prompt", "-s")
 {
     Description = "The system prompt to use for the AI model."
 };
 
-RootCommand rootCommand = new("OpenBot CLI");
+RootCommand rootCommand = new("SharpClaw CLI");
 rootCommand.Options.Add(systemPromptOption);
 
 ParseResult parseResult = rootCommand.Parse(args);
@@ -57,6 +57,6 @@ void SaveMemory()
 {
     if (memorySaved) return;
     memorySaved = true;
-    Console.WriteLine("Exiting... Saving memory.");
+    Console.WriteLine("Exiting... ");
     chatClient.CompactAndSaveMemoryAsync().Wait();
 }

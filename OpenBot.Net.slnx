@@ -1,6 +1,6 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/OpenBotCli/OpenBotCli.csproj" />
-    <Project Path="src/OpenBotLib/OpenBotLib.csproj" />
+    <Project Path="src/SharpClawCli/SharpClawCli.csproj" />
+    <Project Path="src/SharpClawLib/SharpClawLib.csproj" />
   </Folder>
 </Solution>
