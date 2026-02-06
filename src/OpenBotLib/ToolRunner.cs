@@ -4,6 +4,10 @@ using System.Diagnostics;
 
 public class ToolRunner
 {
+    private readonly Action<string>? _beforeInvoke;
+
+    public ToolRunner(Action<string>? beforeInvoke = null) => _beforeInvoke = beforeInvoke;
+
     public (Delegate func, string description)[] GetTools() =>
     [
         (RunToolAsync, "Executes a PowerShell command and returns the output.")
@@ -11,6 +15,7 @@ public class ToolRunner
 
     public async Task<string> RunToolAsync(string command)
     {
+        _beforeInvoke?.Invoke(command);
         string ps1FilePath = string.Empty;
         try
         {

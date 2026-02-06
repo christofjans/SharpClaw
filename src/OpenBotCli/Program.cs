@@ -15,7 +15,14 @@ var systemPrompt = parseResult.GetValue(systemPromptOption) ?? "You are a helpfu
 string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") 
     ?? throw new InvalidOperationException("OPENAI_API_KEY environment variable is not set.");
 
-ToolRunner toolRunner = new();
+ToolRunner toolRunner = new(toolName =>
+{
+    ConsoleColor previousColor = Console.ForegroundColor;
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine($"Invoking tool: {toolName}");
+    Console.ForegroundColor = previousColor;
+    Console.ReadLine();
+});
 
 ChatClient chatClient = ChatClient.CreateOpenAI(apiKey, systemPrompt, tools: toolRunner.GetTools());
 
