@@ -104,6 +104,10 @@ while (true)
     lastInteraction = DateTime.Now;
     if (string.IsNullOrWhiteSpace(userInput))
     {
+        continue;
+    }
+    if (userInput.Trim().ToLower() == "/exit")
+    {
         break;
     }
 
